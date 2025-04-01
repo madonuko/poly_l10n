@@ -133,6 +133,12 @@ impl Rulebook<Rc<Vec<Rulebook>>> {
 }
 
 impl Rulebook {
+    pub fn from_fn(f: impl Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier> + 'static) -> Self {
+        Self {
+            rules: vec![Box::new(f)],
+            owned_values: (),
+        }
+    }
     pub fn from_fns(rules: FnRules) -> Self {
         Self {
             rules,
@@ -151,9 +157,64 @@ impl Rulebook {
 // TODO: rules?
 impl Default for Rulebook {
     fn default() -> Self {
-        Self {
-            rules: Default::default(),
-            owned_values: (),
-        }
+        Self::from_fn(|l| {
+            let Some(lang) = (match l.language.as_str().len() {
+                2 => isolang::Language::from_639_1(l.language.as_str()),
+                3 => isolang::Language::from_639_3(l.language.as_str()),
+                #[allow(unused_variables)]
+                len => {
+                    #[cfg(feature = "tracing")]
+                    tracing::error!(?l, len, "invalid language code, expected length of 2 or 3");
+                    return vec![];
+                }
+            }) else {
+                #[cfg(feature = "tracing")]
+                tracing::error!(?l, "invalid language code, fail to parse with `isolang`");
+                return vec![];
+            };
+
+            let mut rules: Vec<LanguageIdentifier> = vec![];
+
+            macro_rules! rules {
+                ($($rule:expr),*$(,)?) => {
+                    rules.extend_from_slice(&[$({
+                        let rule = $rule;
+                        rule.parse().expect(rules!(@rule))
+                    }),*]);
+                };
+                (@$rule:literal) => { concat!("cannot parse ", $rule) };
+                (@$rule:expr) => { &format!("cannot parse {}", $rule) };
+            }
+
+            match lang.to_639_3() {
+                "arb" => {
+                    if l.variants().len() == 0 {
+                        rules!["ar-AE", "arb-AE"];
+                    } else {
+                        rules!["ar", "arb"];
+                    }
+                }
+                "zho" => match l.script {
+                    Some(s) if s.as_str().eq_ignore_ascii_case("Hans") => todo!(),
+                    Some(s) if s.as_str().eq_ignore_ascii_case("Hant") => todo!(),
+                    Some(script) => {
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!(?l, ?script, "unknown script for zho");
+                    }
+                    None => todo!(),
+                },
+                _ if l.language.as_str().len() == 3 => {
+                    if let Some(two) = lang.to_639_1() {
+                        rules![two];
+                    }
+                }
+                three if l.language.as_str().len() == 2 => {
+                    rules![three];
+                }
+                _ => {}
+            }
+
+            rules
+        })
     }
 }

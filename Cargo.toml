@@ -4,4 +4,10 @@ version = "0.0.1"
 edition = "2024"
 
 [dependencies]
+isolang = { version = "2.4.0", default-features = false }
+tracing = { version = "0.1.41", default-features = false, optional = true }
 unic-langid = "0.9.5"
+
+[features]
+default = ["tracing"]
+tracing = ["dep:tracing"]
