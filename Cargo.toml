@@ -2,6 +2,11 @@
 name = "poly_l10n"
 version = "0.0.1"
 edition = "2024"
+description = "Handle locali(s|z)ations the correct way"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/madonuko/poly_l10n"
+readme = "README.md"
+keywords = ["i18n", "l10n", "localization", "internationalization", "locale"]
 
 [dependencies]
 isolang = { version = "2.4.0", default-features = false }
