@@ -1,10 +1,12 @@
-//! poly_l10n: Handle locali(s|z)ations the correct way
+//! `poly_l10n`: Handle locali(s|z)ations the correct way
 //!
 //! ## Intentions
 //!
 //! See <https://blog.fyralabs.com/advice-on-internationalization/#language-fallbacks>.
 //!
 //! In short, this crate handles language fallbacks and detect system languages *the correct way*.
+//!
+//! Get started by [`LocaleFallbackSolver`] and [`langid!`].
 //!
 //! ## 📃 License
 //!
@@ -25,16 +27,32 @@
 //!    You should have received a copy of the GNU General Public License
 //!    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+pub mod macros;
+
 use std::rc::Rc;
 
 pub use unic_langid::{self, LanguageIdentifier};
 
+/// Entry point of `poly_l10n`.
+///
+/// # Examples
+/// ```
+/// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default();
+/// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "arb-AE", "ara", "ar"]);
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LocaleFallbackSolver<R: for<'a> PolyL10nRulebook<'a> = Rulebook> {
     pub rulebook: R,
 }
 
 impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
+    /// Find alternative fallbacks for the given `locale` as specified by the `rulebook`. This
+    /// operation is recursive and expensive.
+    ///
+    /// ```
+    /// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default();
+    /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "arb-AE", "ara", "ar"]);
+    /// ```
     pub fn solve_locale<L: AsRef<LanguageIdentifier>>(&self, locale: L) -> Vec<LanguageIdentifier> {
         let locale = locale.as_ref();
         let mut locales = self
@@ -43,6 +61,7 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
             .collect::<Vec<_>>();
         let mut old_len = 0;
         while old_len != locales.len() {
+            #[allow(clippy::indexing_slicing)]
             let new_locales = locales[old_len..]
                 .iter()
                 .flat_map(|locale| {
@@ -122,7 +141,7 @@ impl<A: std::any::Any> PolyL10nRulebook<'_> for Rulebook<A> {
 }
 
 impl Rulebook<Rc<Vec<Rulebook>>> {
-    pub fn from_rulebooks(rulebooks: impl Iterator<Item = Rulebook>) -> Self {
+    pub fn from_rulebooks<I: Iterator<Item = Rulebook>>(rulebooks: I) -> Self {
         let mut new = Self {
             owned_values: Rc::new(rulebooks.collect::<Vec<_>>()),
             rules: vec![],
@@ -139,19 +158,20 @@ impl Rulebook<Rc<Vec<Rulebook>>> {
 }
 
 impl Rulebook {
-    pub fn from_fn(f: impl Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier> + 'static) -> Self {
+    pub fn from_fn<F: Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier> + 'static>(f: F) -> Self {
         Self {
             rules: vec![Box::new(f)],
             owned_values: (),
         }
     }
-    pub fn from_fns(rules: FnRules) -> Self {
+    #[must_use]
+    pub const fn from_fns(rules: FnRules) -> Self {
         Self {
             rules,
             owned_values: (),
         }
     }
-    pub fn from_map<M, LS>(map: M) -> M
+    pub const fn from_map<M, LS>(map: M) -> M
     where
         M: for<'a> std::ops::Index<&'a LanguageIdentifier, Output = LS>,
         for<'b> &'b LS: IntoIterator<Item = &'b LanguageIdentifier>,
