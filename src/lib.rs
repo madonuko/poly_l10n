@@ -51,7 +51,7 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
     ///
     /// ```
     /// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default();
-    /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "arb-AE", "ara", "ar"]);
+    /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ara", "ar"]);
     /// ```
     pub fn solve_locale<L: AsRef<LanguageIdentifier>>(&self, locale: L) -> Vec<LanguageIdentifier> {
         let locale = locale.as_ref();
@@ -184,6 +184,7 @@ impl Rulebook {
 impl Default for Rulebook {
     fn default() -> Self {
         Self::from_fn(|l| {
+            use isolang::Language;
             let Some(lang) = (match l.language.as_str().len() {
                 2 => isolang::Language::from_639_1(l.language.as_str()),
                 3 => isolang::Language::from_639_3(l.language.as_str()),
@@ -212,15 +213,15 @@ impl Default for Rulebook {
                 (@$rule:expr) => { &format!("cannot parse {}", $rule) };
             }
 
-            match lang.to_639_3() {
-                "arb" => {
+            match lang {
+                Language::Ara | Language::Arb => {
                     if l.variants().len() == 0 {
-                        rules!["ar-AE", "arb-AE"];
+                        rules!["ar-AE", "ara-AE", "arb-AE"];
                     } else {
-                        rules!["ar", "arb"];
+                        rules!["ar", "ara", "arb"];
                     }
                 }
-                "zho" => match l.script {
+                Language::Zho => match l.script {
                     Some(s) if s.as_str().eq_ignore_ascii_case("Hans") => todo!(),
                     Some(s) if s.as_str().eq_ignore_ascii_case("Hant") => todo!(),
                     Some(script) => {
@@ -229,15 +230,19 @@ impl Default for Rulebook {
                     }
                     None => todo!(),
                 },
-                _ if l.language.as_str().len() == 3 => {
-                    if let Some(two) = lang.to_639_1() {
-                        rules![two];
-                    }
-                }
-                three if l.language.as_str().len() == 2 => {
-                    rules![three];
-                }
                 _ => {}
+            }
+
+            if l.language.as_str().len() == 3 {
+                #[cfg(feature = "tracing")]
+                tracing::trace!(?l, "fallback unknown lang");
+                if let Some(two) = lang.to_639_1() {
+                    rules![two];
+                }
+            } else if l.language.as_str().len() == 2 {
+                #[cfg(feature = "tracing")]
+                tracing::trace!(?l, "fallback unknown lang");
+                rules![lang.to_639_3()];
             }
 
             rules
