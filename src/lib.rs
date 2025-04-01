@@ -45,7 +45,13 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
         while old_len != locales.len() {
             let new_locales = locales[old_len..]
                 .iter()
-                .flat_map(|locale| self.rulebook.find_fallback_locale(locale))
+                .flat_map(|locale| {
+                    self.rulebook.find_fallback_locale(locale).chain(
+                        self.rulebook
+                            .find_fallback_locale_ref(locale)
+                            .map(Clone::clone),
+                    )
+                })
                 .filter(|l| !locales.contains(l))
                 .collect::<Vec<_>>();
             old_len = locales.len();
