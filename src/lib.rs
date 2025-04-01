@@ -79,6 +79,28 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
     }
 }
 
+/// Rulebook trait.
+///
+/// A rulebook is a set of rules for [`LocaleFallbackSolver`]. The solver obtains the list of
+/// fallback locales from the rules in the solver's rulebook.
+///
+/// The default rulebook is [`Rulebook`] and you may create a solver with it using:
+///
+/// ```
+/// poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default()
+/// # ;
+/// ```
+///
+/// With that being said, a custom tailor-made rulebook is possible by implementing this trait for
+/// a new struct.
+///
+/// # Implementation
+/// Only one of [`PolyL10nRulebook::find_fallback_locale`] and
+/// [`PolyL10nRulebook::find_fallback_locale_ref`] SHOULD be implemented. Note that for the latter,
+/// [`LocaleFallbackSolver`] will clone the items in the returned iterator, so there are virtually
+/// no performance difference between the two.
+///
+/// If both functions are implemented, the solver will [`Iterator::chain`] them together.
 pub trait PolyL10nRulebook<'s> {
     fn find_fallback_locale(
         &self,
@@ -227,6 +249,7 @@ impl Default for Rulebook {
                     Some(s) if s.as_str().eq_ignore_ascii_case("Hant") => {
                         rules!["zh-Hant-TW", "zho-Hant-TW", "cmn-Hant-TW"];
                     }
+                    #[allow(unused_variables)]
                     Some(script) => {
                         #[cfg(feature = "tracing")]
                         tracing::warn!(?l, ?script, "unknown script for zho");
