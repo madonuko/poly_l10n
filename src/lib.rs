@@ -31,6 +31,7 @@ pub mod macros;
 
 use std::rc::Rc;
 
+use itertools::Itertools;
 pub use unic_langid::{self, LanguageIdentifier};
 
 /// Entry point of `poly_l10n`.
@@ -38,7 +39,7 @@ pub use unic_langid::{self, LanguageIdentifier};
 /// # Examples
 /// ```
 /// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default();
-/// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "arb-AE", "ara", "ar"]);
+/// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ara", "ar"]);
 /// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LocaleFallbackSolver<R: for<'a> PolyL10nRulebook<'a> = Rulebook> {
@@ -55,10 +56,7 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
     /// ```
     pub fn solve_locale<L: AsRef<LanguageIdentifier>>(&self, locale: L) -> Vec<LanguageIdentifier> {
         let locale = locale.as_ref();
-        let mut locales = self
-            .rulebook
-            .find_fallback_locale(locale)
-            .collect::<Vec<_>>();
+        let mut locales = self.rulebook.find_fallback_locale(locale).collect_vec();
         let mut old_len = 0;
         while old_len != locales.len() {
             #[allow(clippy::indexing_slicing)]
@@ -71,8 +69,9 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
                             .map(Clone::clone),
                     )
                 })
+                .dedup()
                 .filter(|l| !locales.contains(l))
-                .collect::<Vec<_>>();
+                .collect_vec();
             old_len = locales.len();
             locales.extend_from_slice(&new_locales);
         }
@@ -143,14 +142,14 @@ impl<A: std::any::Any> PolyL10nRulebook<'_> for Rulebook<A> {
 impl Rulebook<Rc<Vec<Rulebook>>> {
     pub fn from_rulebooks<I: Iterator<Item = Rulebook>>(rulebooks: I) -> Self {
         let mut new = Self {
-            owned_values: Rc::new(rulebooks.collect::<Vec<_>>()),
+            owned_values: Rc::new(rulebooks.collect_vec()),
             rules: vec![],
         };
         let owned_values = Rc::clone(&new.owned_values);
         new.rules = vec![Box::new(move |l: &LanguageIdentifier| {
             owned_values
                 .iter()
-                .flat_map(|rulebook| rulebook.find_fallback_locale(l).collect::<Vec<_>>())
+                .flat_map(|rulebook| rulebook.find_fallback_locale(l).collect_vec())
                 .collect()
         })];
         new
@@ -207,28 +206,39 @@ impl Default for Rulebook {
                     rules.extend_from_slice(&[$({
                         let rule = $rule;
                         rule.parse().expect(rules!(@rule))
-                    }),*]);
+                    }),*])
                 };
                 (@$rule:literal) => { concat!("cannot parse ", $rule) };
                 (@$rule:expr) => { &format!("cannot parse {}", $rule) };
             }
 
+            // double line → macro
+            // single line → written / standard / main
             match lang {
-                Language::Ara | Language::Arb => {
-                    if l.variants().len() == 0 {
-                        rules!["ar-AE", "ara-AE", "arb-AE"];
-                    } else {
-                        rules!["ar", "ara", "arb"];
-                    }
+                Language::Ara | Language::Arb if l.variants().len() == 0 => {
+                    //    ═══             ───
+                    rules!["ar-AE", "ara-AE", "arb-AE"];
                 }
-                Language::Zho => match l.script {
-                    Some(s) if s.as_str().eq_ignore_ascii_case("Hans") => todo!(),
-                    Some(s) if s.as_str().eq_ignore_ascii_case("Hant") => todo!(),
+                Language::Zho | Language::Cmn => match l.script {
+                    //    ═══             ───
+                    Some(s) if s.as_str().eq_ignore_ascii_case("Hans") => {
+                        rules!["zh-Hans-CN", "zho-Hans-CN", "cmn-Hans-CN"];
+                    }
+                    Some(s) if s.as_str().eq_ignore_ascii_case("Hant") => {
+                        rules!["zh-Hant-TW", "zho-Hant-TW", "cmn-Hant-TW"];
+                    }
                     Some(script) => {
                         #[cfg(feature = "tracing")]
                         tracing::warn!(?l, ?script, "unknown script for zho");
                     }
-                    None => todo!(),
+                    None => rules![
+                        "zh-Hans-CN",
+                        "zho-Hans-CN",
+                        "cmn-Hans-CN",
+                        "zh-Hant-TW",
+                        "zho-Hant-TW",
+                        "cmn-Hant-TW"
+                    ],
                 },
                 _ => {}
             }
@@ -244,6 +254,41 @@ impl Default for Rulebook {
                 tracing::trace!(?l, "fallback unknown lang");
                 rules![lang.to_639_3()];
             }
+
+            #[allow(clippy::arithmetic_side_effects)]
+            let new_rules = rules.iter().flat_map(|rule| {
+                let (ii, jj, kk) = (
+                    usize::from(rule.script.is_some()) + 1,
+                    usize::from(rule.region.is_some()) + 1,
+                    rule.variants().len(),
+                );
+                let k = (0..kk)
+                    .map(|_| [false, true].into_iter())
+                    .multi_cartesian_product();
+                itertools::iproduct!(0..ii, 0..jj, k).filter_map(move |(i, j, v)| {
+                    if i == ii - 1 && j == jj - 1 && v.iter().all(|&b| b) {
+                        // equal orig
+                        return None;
+                    }
+                    let mut r = rule.clone();
+                    if i == 0 {
+                        r.script = None;
+                    }
+                    if j == 0 {
+                        r.region = None;
+                    }
+                    r.clear_variants();
+                    r.set_variants(
+                        &v.into_iter()
+                            .enumerate()
+                            .filter_map(|(i, k)| k.then_some(i))
+                            .map(|i| rule.variants().nth(i).unwrap().to_owned())
+                            .collect_vec(),
+                    );
+                    Some(r)
+                })
+            });
+            rules.extend_from_slice(&new_rules.filter(|r| rules.contains(r)).collect_vec());
 
             rules
         })

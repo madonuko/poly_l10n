@@ -11,6 +11,9 @@ categories = ["accessibility", "internationalization", "localization"]
 
 [dependencies]
 isolang = { version = "2.4.0", default-features = false }
+itertools = { version = "0.14.0", default-features = false, features = [
+    "use_alloc",
+] }
 tracing = { version = "0.1.41", default-features = false, optional = true }
 unic-langid = "0.9.5"
 
