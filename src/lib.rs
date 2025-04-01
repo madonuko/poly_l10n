@@ -152,7 +152,7 @@ pub struct Rulebook<A = ()> {
     pub owned_values: A,
 }
 
-impl<A: std::any::Any> PolyL10nRulebook<'_> for Rulebook<A> {
+impl<A> PolyL10nRulebook<'_> for Rulebook<A> {
     fn find_fallback_locale(
         &self,
         locale: &LanguageIdentifier,
