@@ -358,24 +358,41 @@ impl Default for Rulebook {
                 Language::Zho | Language::Cmn => match l.script {
                     //    ═══             ───
                     Some(s) if s.as_str().eq_ignore_ascii_case("Hans") => {
-                        rules!["zh-Hans-CN", "zho-Hans-CN", "cmn-Hans-CN"];
+                        rules!["zh-Hans-CN", "zho-Hans-CN", "cmn-Hans-CN", "zh-Hant"];
                     }
                     Some(s) if s.as_str().eq_ignore_ascii_case("Hant") => {
-                        rules!["zh-Hant-TW", "zho-Hant-TW", "cmn-Hant-TW"];
+                        rules!["zh-Hant-TW", "zho-Hant-TW", "cmn-Hant-TW", "zh-Hans"];
                     }
                     #[allow(unused_variables)]
                     Some(script) => {
                         #[cfg(feature = "tracing")]
                         tracing::warn!(?l, ?script, "unknown script for zho");
                     }
-                    None => rules![
-                        "zh-Hans-CN",
-                        "zho-Hans-CN",
-                        "cmn-Hans-CN",
-                        "zh-Hant-TW",
-                        "zho-Hant-TW",
-                        "cmn-Hant-TW"
-                    ],
+                    None => match l.region.as_ref().map(unic_langid::subtags::Region::as_str) {
+                        Some("CN" | "SG") => rules!["zh-Hans-CN", "zho-Hans-CN", "cmn-Hans-CN"],
+                        Some("TW") => rules!["zh-Hant-TW", "zho-Hant-TW", "cmn-Hant-TW"],
+                        Some("HK" | "MO") => rules![
+                            "zh-Hant-HK",
+                            "zho-Hant-HK",
+                            "cmn-Hant-HK",
+                            "zh-Hant-TW",
+                            "zho-Hant-TW",
+                            "cmn-Hant-TW"
+                        ],
+                        Some(region) => {
+                            #[cfg(feature = "tracing")]
+                            tracing::warn!(region, "unknown zh region");
+                            rules![format!("zh-Hans-{region}"), format!("zh-Hant-{region}")];
+                        }
+                        None => rules![
+                            "zh-Hans-CN",
+                            "zho-Hans-CN",
+                            "cmn-Hans-CN",
+                            "zh-Hant-TW",
+                            "zho-Hant-TW",
+                            "cmn-Hant-TW"
+                        ],
+                    },
                 },
                 _ => {}
             }
