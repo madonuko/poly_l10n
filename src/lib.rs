@@ -147,6 +147,16 @@ where
 
 pub type FnRules = Vec<Box<dyn Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier>>>;
 
+/// A set of rules that govern how [`LocaleFallbackSolver`] should handle fallbacks.
+///
+/// [`Rulebook<A>`], regardless of the value of `<A>`, stores the rules as [`FnRules`], a vector of
+/// boxed `dyn Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier>`. Therefore, the actual correct
+/// name of this struct should be something along the lines of `FnsRulebook`.
+///
+/// Obviously this rulebook can be used with the solver because it implements [`PolyL10nRulebook`].
+///
+/// In addition, the default rulebook [`Rulebook::default()`] can and probably should be used for
+/// most situations you ever need to deal with.
 pub struct Rulebook<A = ()> {
     pub rules: FnRules,
     pub owned_values: A,
