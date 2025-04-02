@@ -162,6 +162,31 @@ pub struct Rulebook<A = ()> {
     pub owned_values: A,
 }
 
+impl<A: std::fmt::Debug> std::fmt::Debug for Rulebook<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Rulebook")
+            .field("owned_values", &self.owned_values)
+            .field("rules", &PseudoFnRules::from(&self.rules))
+            .finish_non_exhaustive()
+    }
+}
+/// Used for implementing [`Debug`] for [`Rulebook`].
+struct PseudoFnRules {
+    len: usize,
+}
+impl From<&FnRules> for PseudoFnRules {
+    fn from(value: &FnRules) -> Self {
+        Self { len: value.len() }
+    }
+}
+impl std::fmt::Debug for PseudoFnRules {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FnRules")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<A> PolyL10nRulebook<'_> for Rulebook<A> {
     fn find_fallback_locale(
         &self,
@@ -172,6 +197,28 @@ impl<A> PolyL10nRulebook<'_> for Rulebook<A> {
 }
 
 impl Rulebook<Rc<Vec<Rulebook>>> {
+    /// Combine multiple rulebooks into one.
+    ///
+    /// # Examples
+    /// ```
+    /// let rb1 = poly_l10n::Rulebook::from_fn(|l| {
+    ///   let mut l = l.clone();
+    ///   l.script = None;
+    ///   vec![l]
+    /// });
+    /// let rb2 = poly_l10n::Rulebook::from_fn(|l| {
+    ///   let mut l = l.clone();
+    ///   l.region = None;
+    ///   vec![l]
+    /// });
+    /// let rulebook = poly_l10n::Rulebook::from_rulebooks([rb1, rb2].into_iter());
+    /// let solv = poly_l10n::LocaleFallbackSolver { rulebook };
+    ///
+    /// assert_eq!(
+    ///   solv.solve_locale(poly_l10n::langid!["zh-Hant-HK"]),
+    ///   poly_l10n::langid!["zh-HK", "zh-Hant", "zh"]
+    /// );
+    /// ```
     pub fn from_rulebooks<I: Iterator<Item = Rulebook>>(rulebooks: I) -> Self {
         let mut new = Self {
             owned_values: Rc::new(rulebooks.collect_vec()),
