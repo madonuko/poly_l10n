@@ -234,6 +234,52 @@ impl Rulebook<Rc<Vec<Rulebook>>> {
         new
     }
 }
+impl<RR, R> Rulebook<(Rc<Vec<RR>>, std::marker::PhantomData<R>)>
+where
+    RR: AsRef<Rulebook<R>> + 'static,
+{
+    /// Combine multiple rulebooks into one. Each given rulebook `r` must implement
+    /// [`AsRef::as_ref`].
+    ///
+    /// For the owned version, see [`Self::from_rulebooks`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::rc::Rc;
+    /// let rb1 = poly_l10n::Rulebook::from_fn(|l| {
+    ///   let mut l = l.clone();
+    ///   l.script = None;
+    ///   vec![l]
+    /// });
+    /// let rb2 = poly_l10n::Rulebook::from_fn(|l| {
+    ///   let mut l = l.clone();
+    ///   l.region = None;
+    ///   vec![l]
+    /// });
+    /// let (rb1, rb2) = (Rc::new(rb1), Rc::new(rb2));
+    /// let rulebook = poly_l10n::Rulebook::from_ref_rulebooks([rb1, rb2].iter().cloned());
+    /// let solv = poly_l10n::LocaleFallbackSolver { rulebook };
+    ///
+    /// assert_eq!(
+    ///   solv.solve_locale(poly_l10n::langid!["zh-Hant-HK"]),
+    ///   poly_l10n::langid!["zh-HK", "zh-Hant", "zh"]
+    /// );
+    /// ```
+    pub fn from_ref_rulebooks<I: Iterator<Item = RR>>(rulebooks: I) -> Self {
+        let mut new = Self {
+            owned_values: (Rc::new(rulebooks.collect_vec()), std::marker::PhantomData),
+            rules: vec![],
+        };
+        let owned_values = Rc::clone(&new.owned_values.0);
+        new.rules = vec![Box::new(move |l: &LanguageIdentifier| {
+            (owned_values.iter())
+                .flat_map(|rulebook| rulebook.as_ref().find_fallback_locale(l).collect_vec())
+                .collect()
+        })];
+        new
+    }
+}
 
 impl Rulebook {
     pub fn from_fn<F: Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier> + 'static>(f: F) -> Self {
