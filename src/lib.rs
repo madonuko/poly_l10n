@@ -149,9 +149,9 @@ pub type FnRules = Vec<Box<dyn Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier
 
 /// A set of rules that govern how [`LocaleFallbackSolver`] should handle fallbacks.
 ///
-/// [`Rulebook<A>`], regardless of the value of `<A>`, stores the rules as [`FnRules`], a vector of
-/// boxed `dyn Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier>`. Therefore, the actual correct
-/// name of this struct should be something along the lines of `FnsRulebook`.
+/// [`Rulebook<A>`], regardless of type `A`, stores the rules as [`FnRules`], a vector of boxed
+/// `dyn Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier>`. Therefore, the actual correct name of
+/// this struct should be something along the lines of `FnsRulebook`.
 ///
 /// Obviously this rulebook can be used with the solver because it implements [`PolyL10nRulebook`].
 ///
@@ -198,6 +198,8 @@ impl<A> PolyL10nRulebook<'_> for Rulebook<A> {
 
 impl Rulebook<Rc<Vec<Rulebook>>> {
     /// Combine multiple rulebooks into one.
+    ///
+    /// See also: [`Self::from_ref_rulebooks`].
     ///
     /// # Examples
     /// ```
@@ -282,6 +284,7 @@ where
 }
 
 impl Rulebook {
+    #[must_use]
     pub fn from_fn<F: Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier> + 'static>(f: F) -> Self {
         Self {
             rules: vec![Box::new(f)],
@@ -295,12 +298,20 @@ impl Rulebook {
             owned_values: (),
         }
     }
-    pub const fn from_map<M, LS>(map: M) -> M
+    /// Convert a map (or anything that impl [`std::ops::Index<&LanguageIdentifier>`]) into
+    /// a rulebook.
+    ///
+    /// The output of the map must implement [`IntoIterator<Item = &LanguageIdentifier>`].
+    ///
+    /// While any valid arguments to this constructor are guaranteed to satisfy the trait
+    /// [`PolyL10nRulebook`], it could be useful to convert them to rulebooks, e.g. to combine
+    /// multiple rulebooks using [`Self::from_rulebooks`].
+    pub fn from_map<M, LS>(map: M) -> Self
     where
-        M: for<'a> std::ops::Index<&'a LanguageIdentifier, Output = LS>,
+        M: for<'a> std::ops::Index<&'a LanguageIdentifier, Output = LS> + 'static,
         for<'b> &'b LS: IntoIterator<Item = &'b LanguageIdentifier>,
     {
-        map
+        Self::from_fn(move |l| map[l].into_iter().cloned().collect())
     }
 }
 
