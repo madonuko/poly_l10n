@@ -1,6 +1,6 @@
 [package]
 name = "poly_l10n"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 description = "Handle locali(s|z)ations the correct way"
 license = "GPL-3.0-or-later"
@@ -11,9 +11,7 @@ categories = ["accessibility", "internationalization", "localization"]
 
 [dependencies]
 isolang = { version = "2.4.0", default-features = false }
-itertools = { version = "0.14.0", default-features = false, features = [
-    "use_alloc",
-] }
+itertools = { version = "0.14.0" }
 preinterpret = "0.2.0"
 tracing = { version = "0.1.41", default-features = false, optional = true }
 unic-langid = "0.9.5"

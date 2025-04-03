@@ -77,7 +77,10 @@ pub fn default_rulebook(l: &LanguageIdentifier) -> Vec<LanguageIdentifier> {
     }
 
     let new_rules = rules.iter().flat_map(find_rules_omit_optparts);
-    rules.extend_from_slice(&new_rules.filter(|r| rules.contains(r)).collect_vec());
+    let new_rules = new_rules.unique().collect_vec();
+    #[cfg(feature = "tracing")]
+    tracing::trace!(?rules, ?new_rules);
+    rules.extend_from_slice(&new_rules);
 
     rules
 }

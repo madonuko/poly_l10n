@@ -40,7 +40,7 @@ pub use unic_langid::{self, LanguageIdentifier};
 /// # Examples
 /// ```
 /// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default();
-/// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ara", "ar"]);
+/// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ar", "ara", "arb"]);
 /// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LocaleFallbackSolver<R: for<'a> PolyL10nRulebook<'a> = Rulebook> {
@@ -53,11 +53,18 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
     ///
     /// ```
     /// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default();
-    /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ara", "ar"]);
+    /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ar", "ara", "arb"]);
     /// ```
     pub fn solve_locale<L: AsRef<LanguageIdentifier>>(&self, locale: L) -> Vec<LanguageIdentifier> {
+        use std::hash::{Hash, Hasher};
         let locale = locale.as_ref();
         let mut locales = self.rulebook.find_fallback_locale(locale).collect_vec();
+        let h = |l: &LanguageIdentifier| {
+            let mut hasher = std::hash::DefaultHasher::default();
+            l.hash(&mut hasher);
+            hasher.finish()
+        };
+        let mut locale_hashes = locales.iter().map(h).collect_vec();
         let mut old_len = 0;
         while old_len != locales.len() {
             #[allow(clippy::indexing_slicing)]
@@ -70,13 +77,14 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
                             .map(Clone::clone),
                     )
                 })
-                .dedup()
-                .filter(|l| !locales.contains(l))
+                .filter(|l| !locale_hashes.contains(&h(l)))
+                .unique()
                 .collect_vec();
             old_len = locales.len();
             locales.extend_from_slice(&new_locales);
+            locale_hashes.extend(new_locales.iter().map(h));
         }
-        locales
+        locales.into_iter().unique().collect_vec()
     }
 }
 
