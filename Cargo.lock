@@ -67,8 +67,19 @@ version = "0.0.2"
 dependencies = [
  "isolang",
  "itertools",
+ "preinterpret",
  "tracing",
  "unic-langid",
+]
+
+[[package]]
+name = "preinterpret"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1727fb2b8bcde3f60a0073507de280c5da6494798be79b4ee412b487e91891b4"
+dependencies = [
+ "proc-macro2",
+ "syn",
 ]
 
 [[package]]

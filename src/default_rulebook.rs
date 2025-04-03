@@ -2,21 +2,47 @@ use crate::LanguageIdentifier;
 use isolang::Language;
 use itertools::Itertools;
 
+pub const ISOLANG_OVERVIEW_LEN: usize = 7916;
+
+type OptArcFnLangFallbacks = Option<
+    std::sync::Arc<dyn Fn(&LanguageIdentifier, &Language) -> Vec<LanguageIdentifier> + Sync + Send>,
+>;
+type InnerLangRules = [OptArcFnLangFallbacks; ISOLANG_OVERVIEW_LEN];
+
+macro_rules! gen_langrules {
+    ($l:ident $lang:ident: $($($Lang:ident)|+ $(if $guard:expr)? => $rule:expr),+$(,)?) => {
+        gen_langrules!([$] $l $lang: $($($Lang)|+ $(if $guard)? => $rule),+)
+    };
+    ([$dollar:tt] $l:ident $lang:ident: $($($Lang:ident)|+ $(if $guard:expr)? => $rule:expr),+$(,)?) => {{
+        // why pub(crate) aaaaaaaaaaaaa
+        let mut arr: InnerLangRules = [const { None }; ISOLANG_OVERVIEW_LEN];
+
+        macro_rules! rules {
+            ($dollar($r:expr),*$dollar(,)?) => {vec![$dollar({
+                let rule = $r;
+                rule.parse().expect(rules!(@rule))
+            }),*]};
+            (@$r:literal) => { concat!("cannot parse ", $r) };
+            (@$r:expr) => { &format!("cannot parse {}", $r) };
+        }
+
+        preinterpret::preinterpret! { $(
+            [!set! #ifguard = $(if $guard)?]
+            [!set! #else = $(
+                [!ignore! $guard]
+                else { vec![] }
+            )?]
+            $(arr[Language::$Lang as usize] = Some(std::sync::Arc::new(|$l: &LanguageIdentifier, $lang: &Language| #ifguard { $rule } #else));)+
+        )+ }
+
+        return arr;
+    } };
+}
+
 /// [`crate::Rulebook`] function for the default recommended rule(s).
 #[inline]
 pub fn default_rulebook(l: &LanguageIdentifier) -> Vec<LanguageIdentifier> {
-    let Some(lang) = (match l.language.as_str().len() {
-        2 => isolang::Language::from_639_1(l.language.as_str()),
-        3 => isolang::Language::from_639_3(l.language.as_str()),
-        #[allow(unused_variables)]
-        len => {
-            #[cfg(feature = "tracing")]
-            tracing::error!(?l, len, "invalid language code, expected length of 2 or 3");
-            return vec![];
-        }
-    }) else {
-        #[cfg(feature = "tracing")]
-        tracing::error!(?l, "invalid language code, fail to parse with `isolang`");
+    let Some(lang) = langid_to_isolang(l) else {
         return vec![];
     };
 
@@ -33,53 +59,9 @@ pub fn default_rulebook(l: &LanguageIdentifier) -> Vec<LanguageIdentifier> {
         (@$rule:expr) => { &format!("cannot parse {}", $rule) };
     }
 
-    // double line → macro
-    // single line → written / standard / main
-    match lang {
-        Language::Ara | Language::Arb if l.variants().len() == 0 => {
-            //    ═══             ───
-            rules!["ar-AE", "ara-AE", "arb-AE"];
-        }
-        Language::Zho | Language::Cmn => match l.script {
-            //    ═══             ───
-            Some(s) if s.as_str().eq_ignore_ascii_case("Hans") => {
-                rules!["zh-Hans-CN", "zho-Hans-CN", "cmn-Hans-CN", "zh-Hant"];
-            }
-            Some(s) if s.as_str().eq_ignore_ascii_case("Hant") => {
-                rules!["zh-Hant-TW", "zho-Hant-TW", "cmn-Hant-TW", "zh-Hans"];
-            }
-            #[allow(unused_variables)]
-            Some(script) => {
-                #[cfg(feature = "tracing")]
-                tracing::warn!(?l, ?script, "unknown script for zho");
-            }
-            None => match l.region.as_ref().map(unic_langid::subtags::Region::as_str) {
-                Some("CN" | "SG") => rules!["zh-Hans-CN", "zho-Hans-CN", "cmn-Hans-CN"],
-                Some("TW") => rules!["zh-Hant-TW", "zho-Hant-TW", "cmn-Hant-TW"],
-                Some("HK" | "MO") => rules![
-                    "zh-Hant-HK",
-                    "zho-Hant-HK",
-                    "cmn-Hant-HK",
-                    "zh-Hant-TW",
-                    "zho-Hant-TW",
-                    "cmn-Hant-TW"
-                ],
-                Some(region) => {
-                    #[cfg(feature = "tracing")]
-                    tracing::warn!(region, "unknown zh region");
-                    rules![format!("zh-Hans-{region}"), format!("zh-Hant-{region}")];
-                }
-                None => rules![
-                    "zh-Hans-CN",
-                    "zho-Hans-CN",
-                    "cmn-Hans-CN",
-                    "zh-Hant-TW",
-                    "zho-Hant-TW",
-                    "cmn-Hant-TW"
-                ],
-            },
-        },
-        _ => {}
+    #[allow(clippy::indexing_slicing)]
+    if let Some(f) = &LANG_RULES[lang as usize] {
+        rules.extend_from_slice(&f(l, &lang));
     }
 
     if l.language.as_str().len() == 3 {
@@ -98,6 +80,23 @@ pub fn default_rulebook(l: &LanguageIdentifier) -> Vec<LanguageIdentifier> {
     rules.extend_from_slice(&new_rules.filter(|r| rules.contains(r)).collect_vec());
 
     rules
+}
+
+fn langid_to_isolang(l: &LanguageIdentifier) -> Option<Language> {
+    let lang = match l.language.as_str().len() {
+        2 => Language::from_639_1(l.language.as_str()),
+        3 => Language::from_639_3(l.language.as_str()),
+        #[allow(unused_variables)]
+        len => {
+            #[cfg(feature = "tracing")]
+            tracing::error!(?l, len, "invalid language code, expected length of 2 or 3");
+            return None;
+        }
+    };
+    if lang.is_none() && cfg!(feature = "tracing") {
+        tracing::error!(?l, "invalid language code, fail to parse with `isolang`");
+    }
+    lang
 }
 
 /// Generate a list of [`LanguageIdentifier`] without `script`, `region` and/or `variants` from
@@ -138,4 +137,60 @@ fn find_rules_omit_optparts(rule: &LanguageIdentifier) -> impl Iterator<Item = L
         );
         Some(r)
     })
+}
+
+#[allow(unused_variables)]
+pub static LANG_RULES: std::sync::LazyLock<InnerLangRules> = std::sync::LazyLock::new(|| {
+    gen_langrules!(l lang:
+        Ara | Arb if l.variants().len() == 0 => rules!["ar-AE", "ara-AE", "arb-AE"],
+        Zho | Cmn => match l.script {
+            Some(s) if s.as_str().eq_ignore_ascii_case("Hans") => {
+                rules!["zh-Hans-CN", "zho-Hans-CN", "cmn-Hans-CN", "zh-Hant"]
+            }
+            Some(s) if s.as_str().eq_ignore_ascii_case("Hant") => {
+                rules!["zh-Hant-TW", "zho-Hant-TW", "cmn-Hant-TW", "zh-Hans"]
+            }
+            #[allow(unused_variables)]
+            Some(script) => {
+                #[cfg(feature = "tracing")]
+                tracing::warn!(?l, ?script, "unknown script for zho");
+                vec![]
+            }
+            None => match l.region.as_ref().map(unic_langid::subtags::Region::as_str) {
+                Some("CN" | "SG") => rules!["zh-Hans-CN", "zho-Hans-CN", "cmn-Hans-CN"],
+                Some("TW") => rules!["zh-Hant-TW", "zho-Hant-TW", "cmn-Hant-TW"],
+                Some("HK" | "MO") => rules![
+                    "zh-Hant-HK",
+                    "zho-Hant-HK",
+                    "cmn-Hant-HK",
+                    "zh-Hant-TW",
+                    "zho-Hant-TW",
+                    "cmn-Hant-TW"
+                ],
+                Some(region) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!(region, "unknown zh region");
+                    rules![format!("zh-Hans-{region}"), format!("zh-Hant-{region}")]
+                }
+                None => rules![
+                    "zh-Hans-CN",
+                    "zho-Hans-CN",
+                    "cmn-Hans-CN",
+                    "zh-Hant-TW",
+                    "zho-Hant-TW",
+                    "cmn-Hant-TW"
+                ],
+            },
+        },
+    )
+});
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn isolang_overview_len() {
+        assert!(Language::from_usize(ISOLANG_OVERVIEW_LEN).is_none());
+        assert!(Language::from_usize(ISOLANG_OVERVIEW_LEN - 1).is_some());
+    }
 }
