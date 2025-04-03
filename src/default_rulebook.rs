@@ -93,7 +93,8 @@ fn langid_to_isolang(l: &LanguageIdentifier) -> Option<Language> {
             return None;
         }
     };
-    if lang.is_none() && cfg!(feature = "tracing") {
+    #[cfg(feature = "tracing")]
+    if lang.is_none() {
         tracing::error!(?l, "invalid language code, fail to parse with `isolang`");
     }
     lang
