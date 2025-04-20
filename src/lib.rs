@@ -30,20 +30,23 @@
 mod default_rulebook;
 pub mod macros;
 
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 
 use itertools::Itertools;
 pub use unic_langid::{self, LanguageIdentifier};
 
 /// Entry point of `poly_l10n`.
 ///
+/// A solver requires a [`Rulebook`] or [`ARulebook`] to process and solve locales. The latter is
+/// used by [`Self::default`].
+///
 /// # Examples
 /// ```
-/// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default();
+/// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::ARulebook>::default();
 /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ar", "ara", "arb"]);
 /// ```
 #[derive(Clone, Copy, Debug, Default)]
-pub struct LocaleFallbackSolver<R: for<'a> PolyL10nRulebook<'a> = Rulebook> {
+pub struct LocaleFallbackSolver<R: for<'a> PolyL10nRulebook<'a> = ARulebook> {
     pub rulebook: R,
 }
 
@@ -93,10 +96,10 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
 /// A rulebook is a set of rules for [`LocaleFallbackSolver`]. The solver obtains the list of
 /// fallback locales from the rules in the solver's rulebook.
 ///
-/// The default rulebook is [`Rulebook`] and you may create a solver with it using:
+/// The default rulebook is [`ARulebook`] and you may create a solver with it using:
 ///
 /// ```
-/// poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default()
+/// poly_l10n::LocaleFallbackSolver::<poly_l10n::ARulebook>::default()
 /// # ;
 /// ```
 ///
@@ -157,6 +160,8 @@ where
 pub type FnRules = Vec<Box<dyn Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier>>>;
 
 /// A set of rules that govern how [`LocaleFallbackSolver`] should handle fallbacks.
+///
+/// For the thread-safe version, see [`ARulebook<A>`].
 ///
 /// [`Rulebook<A>`], regardless of type `A`, stores the rules as [`FnRules`], a vector of boxed
 /// `dyn Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier>`. Therefore, the actual correct name of
@@ -326,6 +331,189 @@ impl Rulebook {
 
 // TODO: rules?
 impl Default for Rulebook {
+    fn default() -> Self {
+        Self::from_fn(default_rulebook::default_rulebook)
+    }
+}
+
+pub type AFnRules = Vec<Box<dyn Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier> + Send + Sync>>;
+
+/// A set of rules that govern how [`LocaleFallbackSolver`] should handle fallbacks.
+///
+/// This is the thread-safe version of [`Rulebook`].
+///
+/// [`ARulebook<A>`], regardless of type `A`, stores the rules as [`AFnRules`], a vector of boxed
+/// `dyn Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier> + Send + Sync`. Therefore, the actual
+/// correct name of this struct should be something along the lines of `AFnsRulebook`.
+///
+/// Obviously this rulebook can be used with the solver because it implements [`PolyL10nRulebook`].
+///
+/// In addition, the default rulebook [`ARulebook::default()`] can and probably should be used for
+/// most situations you ever need to deal with.
+pub struct ARulebook<A = ()> {
+    pub rules: AFnRules,
+    pub owned_values: A,
+}
+
+impl<A: std::fmt::Debug> std::fmt::Debug for ARulebook<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ARulebook")
+            .field("owned_values", &self.owned_values)
+            .field("rules", &APseudoFnRules::from(&self.rules))
+            .finish_non_exhaustive()
+    }
+}
+/// Used for implementing [`Debug`] for [`ARulebook`].
+struct APseudoFnRules {
+    len: usize,
+}
+impl From<&AFnRules> for APseudoFnRules {
+    fn from(value: &AFnRules) -> Self {
+        Self { len: value.len() }
+    }
+}
+impl std::fmt::Debug for APseudoFnRules {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AFnRules")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<A> PolyL10nRulebook<'_> for ARulebook<A> {
+    fn find_fallback_locale(
+        &self,
+        locale: &LanguageIdentifier,
+    ) -> impl Iterator<Item = LanguageIdentifier> {
+        self.rules.iter().flat_map(|f| f(locale))
+    }
+}
+
+impl ARulebook<Arc<Vec<ARulebook>>> {
+    /// Combine multiple rulebooks into one.
+    ///
+    /// See also: [`Self::from_ref_rulebooks`].
+    ///
+    /// # Examples
+    /// ```
+    /// let rb1 = poly_l10n::ARulebook::from_fn(|l| {
+    ///   let mut l = l.clone();
+    ///   l.script = None;
+    ///   vec![l]
+    /// });
+    /// let rb2 = poly_l10n::ARulebook::from_fn(|l| {
+    ///   let mut l = l.clone();
+    ///   l.region = None;
+    ///   vec![l]
+    /// });
+    /// let rulebook = poly_l10n::ARulebook::from_rulebooks([rb1, rb2].into_iter());
+    /// let solv = poly_l10n::LocaleFallbackSolver { rulebook };
+    ///
+    /// assert_eq!(
+    ///   solv.solve_locale(poly_l10n::langid!["zh-Hant-HK"]),
+    ///   poly_l10n::langid!["zh-HK", "zh-Hant", "zh"]
+    /// );
+    /// ```
+    pub fn from_rulebooks<I: Iterator<Item = ARulebook>>(rulebooks: I) -> Self {
+        let mut new = Self {
+            owned_values: Arc::new(rulebooks.collect_vec()),
+            rules: vec![],
+        };
+        let owned_values = Arc::clone(&new.owned_values);
+        new.rules = vec![Box::new(move |l: &LanguageIdentifier| {
+            owned_values
+                .iter()
+                .flat_map(|rulebook| rulebook.find_fallback_locale(l).collect_vec())
+                .collect()
+        })];
+        new
+    }
+}
+impl<RR, R> ARulebook<(Arc<Vec<RR>>, std::marker::PhantomData<R>)>
+where
+    RR: AsRef<ARulebook<R>> + 'static + Send + Sync,
+{
+    /// Combine multiple rulebooks into one. Each given rulebook `r` must implement
+    /// [`AsRef::as_ref`].
+    ///
+    /// For the owned version, see [`Self::from_rulebooks`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// let rb1 = poly_l10n::ARulebook::from_fn(|l| {
+    ///   let mut l = l.clone();
+    ///   l.script = None;
+    ///   vec![l]
+    /// });
+    /// let rb2 = poly_l10n::ARulebook::from_fn(|l| {
+    ///   let mut l = l.clone();
+    ///   l.region = None;
+    ///   vec![l]
+    /// });
+    /// let (rb1, rb2) = (Arc::new(rb1), Arc::new(rb2));
+    /// let rulebook = poly_l10n::ARulebook::from_ref_rulebooks([rb1, rb2].iter().cloned());
+    /// let solv = poly_l10n::LocaleFallbackSolver { rulebook };
+    ///
+    /// assert_eq!(
+    ///   solv.solve_locale(poly_l10n::langid!["zh-Hant-HK"]),
+    ///   poly_l10n::langid!["zh-HK", "zh-Hant", "zh"]
+    /// );
+    /// ```
+    pub fn from_ref_rulebooks<I: Iterator<Item = RR>>(rulebooks: I) -> Self {
+        let mut new = Self {
+            owned_values: (Arc::new(rulebooks.collect_vec()), std::marker::PhantomData),
+            rules: vec![],
+        };
+        let owned_values = Arc::clone(&new.owned_values.0);
+        new.rules = vec![Box::new(move |l: &LanguageIdentifier| {
+            (owned_values.iter())
+                .flat_map(|rulebook| rulebook.as_ref().find_fallback_locale(l).collect_vec())
+                .collect()
+        })];
+        new
+    }
+}
+
+impl ARulebook {
+    #[must_use]
+    pub fn from_fn<
+        F: Fn(&LanguageIdentifier) -> Vec<LanguageIdentifier> + 'static + Send + Sync,
+    >(
+        f: F,
+    ) -> Self {
+        Self {
+            rules: vec![Box::new(f)],
+            owned_values: (),
+        }
+    }
+    #[must_use]
+    pub const fn from_fns(rules: AFnRules) -> Self {
+        Self {
+            rules,
+            owned_values: (),
+        }
+    }
+    /// Convert a map (or anything that impl [`std::ops::Index<&LanguageIdentifier>`]) into
+    /// a rulebook.
+    ///
+    /// The output of the map must implement [`IntoIterator<Item = &LanguageIdentifier>`].
+    ///
+    /// While any valid arguments to this constructor are guaranteed to satisfy the trait
+    /// [`PolyL10nRulebook`], it could be useful to convert them to rulebooks, e.g. to combine
+    /// multiple rulebooks using [`Self::from_rulebooks`].
+    pub fn from_map<M, LS>(map: M) -> Self
+    where
+        M: for<'a> std::ops::Index<&'a LanguageIdentifier, Output = LS> + 'static + Send + Sync,
+        for<'b> &'b LS: IntoIterator<Item = &'b LanguageIdentifier>,
+    {
+        Self::from_fn(move |l| map[l].into_iter().cloned().collect())
+    }
+}
+
+// TODO: rules?
+impl Default for ARulebook {
     fn default() -> Self {
         Self::from_fn(default_rulebook::default_rulebook)
     }
