@@ -29,6 +29,8 @@
 
 mod default_rulebook;
 pub mod macros;
+#[cfg(feature = "per_lang_default_rules")]
+pub mod per_lang_default_rules;
 
 use std::{rc::Rc, sync::Arc};
 
@@ -43,6 +45,7 @@ pub use unic_langid::{self, LanguageIdentifier};
 /// # Examples
 /// ```
 /// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::ARulebook>::default();
+/// # #[cfg(feature = "per_lang_default_rules")]
 /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ar", "ara", "arb"]);
 /// ```
 #[derive(Clone, Copy, Debug, Default)]
@@ -56,6 +59,7 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
     ///
     /// ```
     /// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default();
+    /// # #[cfg(feature = "per_lang_default_rules")]
     /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ar", "ara", "arb"]);
     /// ```
     pub fn solve_locale<L: AsRef<LanguageIdentifier>>(&self, locale: L) -> Vec<LanguageIdentifier> {

@@ -12,13 +12,17 @@ categories = ["accessibility", "internationalization", "localization"]
 [dependencies]
 isolang = { version = "2.4.0", default-features = false }
 itertools = { version = "0.14.0" }
-preinterpret = "0.2.0"
+preinterpret = { version = "0.2.0", optional = true }
 tracing = { version = "0.1.41", default-features = false, optional = true }
 unic-langid = "0.9.5"
 
 [features]
-default = ["tracing"]
+default = ["tracing", "per_lang_default_rules"]
 tracing = ["dep:tracing"]
+per_lang_default_rules = ["dep:preinterpret"]
+
+[package.metadata."docs.rs"]
+all-features = true
 
 [lints.clippy]
 cargo = { level = "warn", priority = -1 }
