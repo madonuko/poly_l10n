@@ -186,6 +186,8 @@ pub static LANG_RULES: std::sync::LazyLock<InnerLangRules> = std::sync::LazyLock
                 ],
             },
         },
+        Spa if l.variants().len() == 0 => rules!["es-ES", "spa-ES", "pt-PT", "por-PT"],
+        Por if l.variants().len() == 0 => rules!["pt-PT", "por-PT", "es-ES", "spa-ES"],
     )
 });
 
