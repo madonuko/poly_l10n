@@ -28,6 +28,7 @@
 //!    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 mod default_rulebook;
+pub mod getlang;
 pub mod macros;
 #[cfg(feature = "per_lang_default_rules")]
 pub mod per_lang_default_rules;
