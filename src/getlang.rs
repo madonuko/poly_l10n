@@ -1,3 +1,7 @@
+#[cfg(windows)]
+mod windows;
+
+#[cfg_attr(not(test), cfg(not(windows)))]
 use itertools::Itertools;
 use std::str::FromStr;
 use unic_langid::LanguageIdentifier;
@@ -21,7 +25,7 @@ pub fn unix_system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
 pub use unix_system_want_langids as system_want_langids;
 
 #[cfg(target_os = "macos")]
-fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
+pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
     //? https://stackoverflow.com/questions/14908180/know-currently-logged-in-users-language-in-mac-via-shell-script#comment21002995_14908268
     let res = match std::process::Command::new("defaults")
         .args(["read", "NSGlobalDomain", "AppleLanguages"])
@@ -85,20 +89,27 @@ impl Iterator for MacSysLangidsIterator {
 }
 
 #[cfg(windows)]
-fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
-    todo!()
+pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
+    (windows::get_system_locales().into_iter()).filter_map(|locale| {
+        match LanguageIdentifier::from_str(&locale) {
+            Ok(l) => return Some(l),
+            Err(_) if !cfg!(feature = "tracing") => {}
+            Err(err) => tracing::error!(?locale, ?err, "cannot convert to langid"),
+        }
+        None
+    })
 }
 
 #[cfg(not(unix))]
 #[cfg(not(windows))]
-compile_error!("This operating system is not supported by poly_l10n");
+compile_error!("This operating system is not supported by poly_l10n (help required!).");
 
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn nix_langids() {
+    fn langids() {
         println!("{:?}", system_want_langids().collect_vec());
     }
 }
