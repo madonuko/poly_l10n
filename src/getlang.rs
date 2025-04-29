@@ -3,6 +3,43 @@ use itertools::Itertools;
 use std::str::FromStr;
 use unic_langid::LanguageIdentifier;
 
+/// Obtain a list of [`LanguageIdentifier`]s the user prefers.
+///
+/// The behaviour of this function depends on the platform:
+/// - Unix (`cfg!(unix)` except `cfg!(target_os = "macos")`): [`unix_system_want_langids`]
+/// - Mac OS X (`cfg!(target_os = "macos")`): [`macos_system_want_langids`]
+/// - Windows (`cfg!(windows)`): [`windows_system_want_langids`]
+///
+/// Even though they may not render in docs.rs, they have the same function signature to this
+/// function.
+///
+/// Note that [`unix_system_want_langids()`] is available even on Mac OS X. In fact,
+/// [`macos_system_want_langids()`] depends on that function, chaining the iterators.
+pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
+    #[cfg(unix)]
+    #[cfg(not(target_os = "macos"))]
+    {
+        unix_system_want_langids()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        macos_system_want_langids()
+    }
+    #[cfg(windows)]
+    {
+        windows_system_want_langids()
+    }
+}
+
+/// Obtain a list of [`LanguageIdentifier`]s the user prefers, by looking up environment variables.
+///
+/// This function is only available on `cfg!(unix)`.
+///
+/// The alternatives on other platforms are:
+/// - Mac OS X (`cfg!(target_os = "macos")`): [`macos_system_want_langids`]
+/// - Windows (`cfg!(windows)`): [`windows_system_want_langids`]
+///
+/// Note that this function is available even on Mac OS X, and is used in combination.
 #[cfg(unix)]
 pub fn unix_system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
     ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE", "LANGUAGES"]
@@ -17,12 +54,8 @@ pub fn unix_system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
         })
 }
 
-#[cfg(unix)]
-#[cfg(not(target_os = "macos"))]
-pub use unix_system_want_langids as system_want_langids;
-
 #[cfg(target_os = "macos")]
-pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
+pub fn macos_system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
     //? https://stackoverflow.com/questions/14908180/know-currently-logged-in-users-language-in-mac-via-shell-script#comment21002995_14908268
     let res = match std::process::Command::new("defaults")
         .args(["read", "NSGlobalDomain", "AppleLanguages"])
@@ -86,7 +119,7 @@ impl Iterator for MacSysLangidsIterator {
 }
 
 #[cfg(windows)]
-pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
+pub fn windows_system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
     (get_system_locales().into_iter()).filter_map(|locale| {
         match LanguageIdentifier::from_str(&locale) {
             Ok(l) => return Some(l),

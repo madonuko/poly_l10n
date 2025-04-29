@@ -6,7 +6,7 @@
 //!
 //! In short, this crate handles language fallbacks and detect system languages *the correct way*.
 //!
-//! Get started by [`LocaleFallbackSolver`] and [`langid!`].
+//! Get started by [`LocaleFallbackSolver`], [`system_want_langids`] and [`langid!`].
 //!
 //! ## 📃 License
 //!
