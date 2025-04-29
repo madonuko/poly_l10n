@@ -1,3 +1,7 @@
+//! Get started by [`system_want_langids()`].
+//!
+//! This module is gated behind the feature `getlang` (enabled by default).
+
 #[cfg_attr(not(test), cfg(not(windows)))]
 use itertools::Itertools;
 use std::str::FromStr;
@@ -15,6 +19,16 @@ use unic_langid::LanguageIdentifier;
 ///
 /// Note that [`unix_system_want_langids()`] is available even on Mac OS X. In fact,
 /// [`macos_system_want_langids()`] depends on that function, chaining the iterators.
+///
+/// # Examples
+///
+/// ```
+/// let solver: poly_l10n::LocaleFallbackSolver = Default::default();
+/// let langs = poly_l10n::system_want_langids()
+///     .flat_map(|li| solver.solve_locale(li))
+///     .collect::<Vec<_>>();
+/// println!("{langs:?}");
+/// ```
 pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
     #[cfg(unix)]
     #[cfg(not(target_os = "macos"))]

@@ -1,3 +1,9 @@
+//! Module for handling fallback rules for specific languages.
+//!
+//! While you may use `poly_l10n` fine without this, we believe this improves your experience
+//! working with i18n in general, which is why this is enabled by default.
+//!
+//! This module is gated behind the feature `per_lang_default_rules`.
 use isolang::Language;
 use unic_langid::LanguageIdentifier;
 
