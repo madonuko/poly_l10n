@@ -19,11 +19,13 @@ unic-langid = "0.9.5"
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.61.1"
 features = ["Win32_Globalization"]
+optional = true
 
 [features]
-default = ["tracing", "per_lang_default_rules"]
+default = ["tracing", "per_lang_default_rules", "getlang"]
 tracing = ["dep:tracing"]
 per_lang_default_rules = ["dep:preinterpret"]
+getlang = ["dep:windows"]
 
 [package.metadata."docs.rs"]
 all-features = true

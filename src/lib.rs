@@ -28,6 +28,7 @@
 //!    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 mod default_rulebook;
+#[cfg(feature = "getlang")]
 pub mod getlang;
 pub mod macros;
 #[cfg(feature = "per_lang_default_rules")]
@@ -35,6 +36,8 @@ pub mod per_lang_default_rules;
 
 use std::{rc::Rc, sync::Arc};
 
+#[cfg(feature = "getlang")]
+pub use getlang::system_want_langids;
 use itertools::Itertools;
 pub use unic_langid::{self, LanguageIdentifier};
 

@@ -37,11 +37,11 @@ pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
             return Box::new(unix_system_want_langids()) as Box<dyn Iterator<Item = _>>;
         }
     };
-    Box::new(macos_parse_system_want_langids(res.stdout).chain(unix_system_want_langids()))
+    Box::new(macos_parse_want_langids(res.stdout).chain(unix_system_want_langids()))
 }
 
 #[cfg(target_os = "macos")]
-fn macos_parse_system_want_langids(stdout: Vec<u8>) -> impl Iterator<Item = LanguageIdentifier> {
+pub fn macos_parse_want_langids(stdout: Vec<u8>) -> impl Iterator<Item = LanguageIdentifier> {
     MacSysLangidsIterator {
         positions: stdout.iter().positions(|&b| b == b',').collect_vec(),
         stdout,
@@ -50,7 +50,7 @@ fn macos_parse_system_want_langids(stdout: Vec<u8>) -> impl Iterator<Item = Lang
 }
 
 #[cfg(target_os = "macos")]
-struct MacSysLangidsIterator {
+pub struct MacSysLangidsIterator {
     stdout: Vec<u8>,
     positions: Vec<usize>,
     i: usize,
@@ -98,7 +98,7 @@ pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
 }
 
 #[cfg(windows)]
-pub(super) fn get_system_locales() -> Vec<String> {
+fn get_system_locales() -> Vec<String> {
     let mut num_langs = 0;
     let mut buffer_size = 0;
 
