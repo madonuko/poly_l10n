@@ -2,6 +2,13 @@
 
 Handle locali(s|z)ations the correct way.
 
+There are many i18n libraries out there that doesn't do this right: language fallbacks.
+Unfortunately most projects (regardless of whether or not it's open source) do not support all
+languages. This library fixes this for you with [`LocaleFallbackSolver`].
+
+Additionally this library provides helper functions for figuring out the user language preference.
+See [`system_want_langids`].
+
 ## 📃 License
 
 `GPL-3.0-or-later`
@@ -21,3 +28,6 @@ Handle locali(s|z)ations the correct way.
     You should have received a copy of the GNU General Public License along
     with this program; if not, write to the Free Software Foundation, Inc.,
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+[`LocaleFallbackSolver`]: https://docs.rs/poly_l10n/latest/poly_l10n/struct.LocaleFallbackSolver.html
+[`system_want_langids`]: https://docs.rs/poly_l10n/latest/poly_l10n/getlang/fn.system_want_langids.html
