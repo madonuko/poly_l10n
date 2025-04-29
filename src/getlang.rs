@@ -1,6 +1,3 @@
-#[cfg(windows)]
-mod windows;
-
 #[cfg_attr(not(test), cfg(not(windows)))]
 use itertools::Itertools;
 use std::str::FromStr;
@@ -90,7 +87,7 @@ impl Iterator for MacSysLangidsIterator {
 
 #[cfg(windows)]
 pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
-    (windows::get_system_locales().into_iter()).filter_map(|locale| {
+    (get_system_locales().into_iter()).filter_map(|locale| {
         match LanguageIdentifier::from_str(&locale) {
             Ok(l) => return Some(l),
             Err(_) if !cfg!(feature = "tracing") => {}
@@ -98,6 +95,59 @@ pub fn system_want_langids() -> impl Iterator<Item = LanguageIdentifier> {
         }
         None
     })
+}
+
+#[cfg(windows)]
+pub(super) fn get_system_locales() -> Vec<String> {
+    let mut num_langs = 0;
+    let mut buffer_size = 0;
+
+    #[cfg_attr(not(feature = "tracing"), allow(unused_variables))]
+    // SAFETY: Well we're using this API correctly :3
+    if let Err(err) = unsafe {
+        windows::Win32::Globalization::GetUserPreferredUILanguages(
+            windows::Win32::Globalization::MUI_LANGUAGE_NAME,
+            &mut num_langs,
+            None,
+            &mut buffer_size,
+        )
+    } {
+        #[cfg(feature = "tracing")]
+        tracing::error!(?err, "fail to get bufsize from GetUserPreferredUILanguages");
+        return vec![];
+    }
+    let mut buffer = vec![0u16; buffer_size as usize];
+
+    #[cfg_attr(not(feature = "tracing"), allow(unused_variables))]
+    // SAFETY: Second call to retrieve the actual data
+    if let Err(err) = unsafe {
+        windows::Win32::Globalization::GetUserPreferredUILanguages(
+            windows::Win32::Globalization::MUI_LANGUAGE_NAME,
+            &mut num_langs,
+            Some(windows::core::PWSTR(buffer.as_mut_ptr())),
+            &mut buffer_size,
+        )
+    } {
+        #[cfg(feature = "tracing")]
+        tracing::error!(?err, "GetUserPreferredUILanguages failed");
+        return vec![];
+    }
+
+    let locales = buffer
+        .split(|&c| c == 0) // split on \0
+        .filter(|s| !s.is_empty()) // skip last empty slice
+        .filter_map(|s| {
+            #[allow(unused_variables)]
+            String::from_utf16(s)
+                .inspect_err(|err| {
+                    #[cfg(feature = "tracing")]
+                    tracing::error!(?err, "cannot convert utf16")
+                })
+                .ok()
+        })
+        .collect();
+
+    locales
 }
 
 #[cfg(not(unix))]
