@@ -141,7 +141,7 @@ pub(super) fn get_system_locales() -> Vec<String> {
             String::from_utf16(s)
                 .inspect_err(|err| {
                     #[cfg(feature = "tracing")]
-                    tracing::error!(?err, "cannot convert utf16")
+                    tracing::error!(?err, "cannot convert utf16");
                 })
                 .ok()
         })

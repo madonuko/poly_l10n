@@ -71,7 +71,6 @@ dependencies = [
  "tracing",
  "unic-langid",
  "windows",
- "windows-core",
 ]
 
 [[package]]

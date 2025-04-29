@@ -18,10 +18,7 @@ unic-langid = "0.9.5"
 
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.61.1"
-features = ["Win32_Globalization", "Win32_Foundation"]
-
-[target.'cfg(windows)'.dependencies]
-windows-core = "0.61.0"
+features = ["Win32_Globalization"]
 
 [features]
 default = ["tracing", "per_lang_default_rules"]
