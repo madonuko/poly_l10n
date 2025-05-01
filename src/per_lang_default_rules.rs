@@ -89,6 +89,38 @@ pub static LANG_RULES: std::sync::LazyLock<InnerLangRules> = std::sync::LazyLock
         },
         Spa if l.variants().len() == 0 => rules!["es-ES", "spa-ES", "pt-PT", "por-PT"],
         Por if l.variants().len() == 0 => rules!["pt-PT", "por-PT", "es-ES", "spa-ES"],
+        Yue => match l.script {
+            Some(s) if s.as_str().eq_ignore_ascii_case("Hans") => {
+                rules!["yue-Hans-CN", "yue-Hant-HK", "yue-Hant-MO", "zho"]
+            }
+            Some(s) if s.as_str().eq_ignore_ascii_case("Hant") => {
+                rules!["yue-Hant-HK", "yue-Hant-MO", "zho"]
+            }
+            #[allow(unused_variables)]
+            Some(script) => {
+                #[cfg(feature = "tracing")]
+                tracing::warn!(?l, ?script, "unknown script for yue");
+                vec![]
+            }
+            None => match l.region.as_ref().map(unic_langid::subtags::Region::as_str) {
+                Some("CN" | "SG") => rules!["yue-Hans-CN", "yue-Hans-HK", "zho-Hans-CN"],
+                Some("TW") => rules!["yue-Hant-TW", "yue-Hant-HK", "zho-Hant-TW"],
+                Some("HK" | "MO") => rules![
+                    "yue-Hant-HK",
+                    "zho-Hant-HK",
+                    "yue-Hant-MO",
+                    "zho-Hant-MO",
+                    "yue-Hant-TW",
+                    "zho-Hant-TW",
+                ],
+                Some(region) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!(region, "unknown yue region");
+                    rules![format!("yue-Hans-{region}"), format!("zh-Hant-{region}")]
+                }
+                None => rules![ "yue-Hant-HK", "yue-Hant-MO"],
+            },
+        }
     )
 });
 
