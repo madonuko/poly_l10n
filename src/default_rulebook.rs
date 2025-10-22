@@ -28,13 +28,13 @@ pub fn default_rulebook(l: &LanguageIdentifier) -> Vec<LanguageIdentifier> {
         rules.extend_from_slice(&f(l, &lang));
     }
 
-    if l.language.as_str().len() == 3 {
+    if l.language.as_str().len() == 2 {
         #[cfg(feature = "tracing")]
         tracing::trace!(?l, "fallback unknown lang");
         if let Some(two) = lang.to_639_1() {
             rules![two];
         }
-    } else if l.language.as_str().len() == 2 {
+    } else if l.language.as_str().len() == 3 {
         #[cfg(feature = "tracing")]
         tracing::trace!(?l, "fallback unknown lang");
         rules![lang.to_639_3()];
