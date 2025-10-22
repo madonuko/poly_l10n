@@ -22,12 +22,6 @@ pub fn default_rulebook(l: &LanguageIdentifier) -> Vec<LanguageIdentifier> {
         (@$rule:expr) => { &format!("cannot parse {}", $rule) };
     }
 
-    #[cfg(feature = "per_lang_default_rules")]
-    #[allow(clippy::indexing_slicing)]
-    if let Some(f) = &crate::per_lang_default_rules::LANG_RULES[lang as usize] {
-        rules.extend_from_slice(&f(l, &lang));
-    }
-
     if l.language.as_str().len() == 2 {
         #[cfg(feature = "tracing")]
         tracing::trace!(?l, "fallback unknown lang");
@@ -38,6 +32,12 @@ pub fn default_rulebook(l: &LanguageIdentifier) -> Vec<LanguageIdentifier> {
         #[cfg(feature = "tracing")]
         tracing::trace!(?l, "fallback unknown lang");
         rules![lang.to_639_3()];
+    }
+
+    #[cfg(feature = "per_lang_default_rules")]
+    #[allow(clippy::indexing_slicing)]
+    if let Some(f) = &crate::per_lang_default_rules::LANG_RULES[lang as usize] {
+        rules.extend_from_slice(&f(l, &lang));
     }
 
     let new_rules = rules.iter().flat_map(find_rules_omit_optparts);

@@ -118,7 +118,7 @@ pub static LANG_RULES: std::sync::LazyLock<InnerLangRules> = std::sync::LazyLock
                     tracing::warn!(region, "unknown yue region");
                     rules![format!("yue-Hans-{region}"), format!("zh-Hant-{region}")]
                 }
-                None => rules![ "yue-Hant-HK", "yue-Hant-MO"],
+                None => rules!["yue-Hant-HK", "yue-Hant-MO"],
             },
         }
     )

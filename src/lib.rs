@@ -50,7 +50,7 @@ pub use unic_langid::{self, LanguageIdentifier};
 /// ```
 /// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::ARulebook>::default();
 /// # #[cfg(feature = "per_lang_default_rules")]
-/// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ar", "ara", "arb"]);
+/// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["arb", "ar-AE", "ara-AE", "arb-AE", "ar", "ara"]);
 /// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LocaleFallbackSolver<R: for<'a> PolyL10nRulebook<'a> = ARulebook> {
@@ -64,7 +64,7 @@ impl<R: for<'a> PolyL10nRulebook<'a>> LocaleFallbackSolver<R> {
     /// ```
     /// let solver = poly_l10n::LocaleFallbackSolver::<poly_l10n::Rulebook>::default();
     /// # #[cfg(feature = "per_lang_default_rules")]
-    /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["ar-AE", "ara-AE", "arb-AE", "ar", "ara", "arb"]);
+    /// assert_eq!(solver.solve_locale(poly_l10n::langid!("arb")), poly_l10n::langid!["arb", "ar-AE", "ara-AE", "arb-AE", "ar", "ara"]);
     /// ```
     pub fn solve_locale<L: AsRef<LanguageIdentifier>>(&self, locale: L) -> Vec<LanguageIdentifier> {
         use std::hash::{Hash, Hasher};
